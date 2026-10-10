@@ -24,6 +24,7 @@ jobs:
         ${{ steps.check.outcome == 'failure' && 'true' || steps.check.outputs.needs-updating }}
     steps:
       - name: Log in to GitHub Container Registry
+        if: github.event_name == 'schedule'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -31,6 +32,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check if Caddy base image updated
+        if: github.event_name == 'schedule'
         id: check
         continue-on-error: true
         uses: lucacome/docker-image-update-checker@v3
@@ -45,21 +47,22 @@ jobs:
     if: github.event_name != 'schedule' || needs.check-updates.outputs.needs-updating == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repo
-        uses: actions/checkout@v4
+      - parallel:
+          - name: Check out repo
+            uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+          - name: Set up QEMU
+            uses: docker/setup-qemu-action@v3
+
+          - name: Log in to GitHub Container Registry
+            uses: docker/login-action@v3
+            with:
+              registry: ghcr.io
+              username: ${{ github.actor }}
+              password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata
         id: meta
@@ -73,10 +76,11 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: .
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          context: .
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          pull: true
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
