@@ -20,15 +20,24 @@ jobs:
     name: Check for base image updates
     runs-on: ubuntu-latest
     outputs:
-      needs-updating: ${{ steps.check.outputs.needs-updating }}
+      needs-updating: >-
+        ${{ steps.check.outcome == 'failure' && 'true' || steps.check.outputs.needs-updating }}
     steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Check if Caddy base image updated
         id: check
+        continue-on-error: true
         uses: lucacome/docker-image-update-checker@v3
         with:
-         base-image: caddy:latest
-         # Checks against your GitHub registry instead of Docker Hub
-         image: ghcr.io/${{ github.repository }}:latest
+          base-image: caddy:latest
+          image: ghcr.io/${{ github.repository }}:latest
+          platforms: linux/amd64,linux/arm64
 
   build-and-push:
     name: Build and Push
